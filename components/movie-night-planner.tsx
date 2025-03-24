@@ -111,14 +111,29 @@ export default function MovieNightPlanner() {
     )
   }, [])
 
+  // Add a function to delete a movie:
+  const deleteMovie = useCallback((id: string) => {
+    // Remove the movie
+    setMovies((prev) => prev.filter((movie) => movie.id !== id))
+
+    // Also remove any movie nights that reference this movie
+    setMovieNights((prev) => prev.filter((night) => night.movieId !== id))
+  }, [])
+
+  // Add a function to remove a movie night:
+  const removeMovieNight = useCallback((id: string) => {
+    setMovieNights((prev) => prev.filter((night) => night.id !== id))
+  }, [])
+
   // Memoize props for child components to prevent unnecessary re-renders
   const movieSuggestionsProps = useMemo(
     () => ({
       movies,
       onAddMovie: addMovie,
       onVote: voteMovie,
+      onDeleteMovie: deleteMovie,
     }),
-    [movies, addMovie, voteMovie],
+    [movies, addMovie, voteMovie, deleteMovie],
   )
 
   const scheduleAvailabilityProps = useMemo(
@@ -128,8 +143,9 @@ export default function MovieNightPlanner() {
       onSchedule: scheduleMovieNight,
       onToggleAttendance: toggleAttendance,
       setMovieNights,
+      onRemoveMovieNight: removeMovieNight,
     }),
-    [movies, movieNights, scheduleMovieNight, toggleAttendance, setMovieNights],
+    [movies, movieNights, scheduleMovieNight, toggleAttendance, setMovieNights, removeMovieNight],
   )
 
   return (

@@ -23,7 +23,15 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Users, PlusCircle, CheckCircle2, X, CalendarPlus2Icon as CalendarIcon2 } from "lucide-react"
+import {
+  CalendarIcon,
+  Users,
+  PlusCircle,
+  CheckCircle2,
+  X,
+  CalendarPlus2Icon as CalendarIcon2,
+  Trash,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import {
@@ -250,11 +258,13 @@ const MovieNightCard = memo(
     movie,
     onAddAttendee,
     onRemoveAttendee,
+    onRemoveNight,
   }: {
     night: MovieNight
     movie: Movie | undefined
     onAddAttendee: (nightId: string, name: string) => void
     onRemoveAttendee: (nightId: string, attendeeId: string) => void
+    onRemoveNight: (nightId: string) => void
   }) => {
     if (!movie) return null
 
@@ -274,8 +284,20 @@ const MovieNightCard = memo(
     return (
       <Card className="overflow-hidden h-[350px] flex flex-col">
         <CardContent className="p-6 flex-1 overflow-hidden flex flex-col">
-          <h3 className="text-xl font-bold">{movie.title}</h3>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">{formattedDate}</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-bold">{movie.title}</h3>
+              <p className="text-gray-600 dark:text-gray-300 mt-1">{formattedDate}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-500 hover:text-red-700"
+              onClick={() => onRemoveNight(night.id)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          </div>
 
           <div className="mt-4 flex-1 overflow-hidden flex flex-col">
             <h4 className="font-medium flex items-center gap-1">
@@ -301,6 +323,7 @@ interface ScheduleAvailabilityProps {
   onSchedule: (movieId: string, date: Date) => void
   onToggleAttendance: (movieNightId: string, attendeeId: string) => void
   setMovieNights: (nights: MovieNight[]) => void
+  onRemoveMovieNight: (nightId: string) => void
 }
 
 export function ScheduleAvailability({
@@ -309,6 +332,7 @@ export function ScheduleAvailability({
   onSchedule,
   onToggleAttendance,
   setMovieNights,
+  onRemoveMovieNight,
 }: ScheduleAvailabilityProps) {
   const [open, setOpen] = useState(false)
   const { toast } = useToast()
@@ -437,6 +461,26 @@ export function ScheduleAvailability({
   // Memoize the movie night cards with the local state
   const hasMovies = movies.length > 0
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [nightToDelete, setNightToDelete] = useState<string | null>(null)
+
+  const handleRemoveNight = useCallback((id: string) => {
+    setNightToDelete(id)
+    setDeleteConfirmOpen(true)
+  }, [])
+
+  const confirmRemoveNight = useCallback(() => {
+    if (nightToDelete) {
+      onRemoveMovieNight(nightToDelete)
+      setNightToDelete(null)
+      setDeleteConfirmOpen(false)
+      toast({
+        title: "Movie night deleted",
+        description: "The movie night has been removed from the schedule",
+      })
+    }
+  }, [nightToDelete, onRemoveMovieNight, toast])
+
   const movieNightCards = useMemo(() => {
     return localMovieNights.map((night) => (
       <MovieNightCard
@@ -445,9 +489,10 @@ export function ScheduleAvailability({
         movie={getMovieById(night.movieId)}
         onAddAttendee={handleAddAttendee}
         onRemoveAttendee={handleRemoveAttendee}
+        onRemoveNight={handleRemoveNight}
       />
     ))
-  }, [localMovieNights, getMovieById, handleAddAttendee, handleRemoveAttendee])
+  }, [localMovieNights, getMovieById, handleAddAttendee, handleRemoveAttendee, handleRemoveNight])
 
   const handleOpenDialog = useCallback(() => {
     setOpen(true)
@@ -557,6 +602,22 @@ export function ScheduleAvailability({
           )}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Movie Night</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this movie night? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveNight} className="bg-red-500 hover:bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
