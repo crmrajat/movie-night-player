@@ -2,16 +2,23 @@ export interface Movie {
   id: string
   title: string
   description: string
-  likes: number
-  dislikes: number
-  imageUrl: string
+  votes: {
+    up: number
+    down: number
+  }
+  userVote?: "up" | "down" | null // Track user's vote
 }
 
-export interface ScheduledMovie {
+export interface Attendee {
+  id: string
+  name: string
+  isAttending: boolean
+}
+
+export interface MovieNight {
+  id: string
   movieId: string
   date: Date
-  attendees: string[]
+  attendees: Attendee[]
 }
-
-export type VoteType = "like" | "dislike"
 

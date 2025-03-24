@@ -1,97 +1,163 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, lazy, Suspense, useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import MovieSuggestions from "@/components/movie-suggestions"
-import ScheduleViewing from "@/components/schedule-viewing"
-import type { Movie, ScheduledMovie, VoteType } from "@/lib/types"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import type { Movie, MovieNight } from "@/lib/types"
+
+// Use lazy loading for components with explicit chunk names for better caching
+const MovieSuggestions = lazy(() =>
+  import("@/components/movie-suggestions").then((mod) => ({ default: mod.MovieSuggestions })),
+)
+const ScheduleAvailability = lazy(() =>
+  import("@/components/schedule-availability").then((mod) => ({ default: mod.ScheduleAvailability })),
+)
+
+// Loading fallbacks
+const MovieSuggestionsFallback = () => (
+  <div className="animate-pulse space-y-4">
+    <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="h-[250px] bg-gray-200 dark:bg-gray-700 rounded"></div>
+      <div className="h-[250px] bg-gray-200 dark:bg-gray-700 rounded"></div>
+    </div>
+  </div>
+)
+
+const ScheduleAvailabilityFallback = () => (
+  <div className="animate-pulse space-y-4">
+    <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded"></div>
+      <div className="h-[350px] bg-gray-200 dark:bg-gray-700 rounded"></div>
+    </div>
+  </div>
+)
 
 export default function MovieNightPlanner() {
-  const [movies, setMovies] = useState<Movie[]>([
-    {
-      id: "1",
-      title: "The Shawshank Redemption",
-      description: "Two imprisoned men bond over a number of years.",
-      likes: 4,
-      dislikes: 1,
-      imageUrl: "/placeholder.svg?height=150&width=100",
-    },
-    {
-      id: "2",
-      title: "The Godfather",
-      description: "The aging patriarch of an organized crime dynasty transfers control to his son.",
-      likes: 2,
-      dislikes: 0,
-      imageUrl: "/placeholder.svg?height=150&width=100",
-    },
-    {
-      id: "3",
-      title: "The Dark Knight",
-      description: "Batman fights the menace known as the Joker.",
-      likes: 5,
-      dislikes: 2,
-      imageUrl: "/placeholder.svg?height=150&width=100",
-    },
-  ])
+  // Start with empty arrays instead of hardcoded data
+  const [movies, setMovies] = useState<Movie[]>([])
+  const [movieNights, setMovieNights] = useState<MovieNight[]>([])
 
-  const [scheduledMovies, setScheduledMovies] = useState<ScheduledMovie[]>([
-    { movieId: "1", date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), attendees: ["Alice", "Bob", "Charlie"] },
-  ])
-
-  const addMovie = (movie: Omit<Movie, "id" | "likes" | "dislikes">) => {
+  // Use useCallback to memoize callback functions
+  const addMovie = useCallback((movie: Omit<Movie, "id" | "votes" | "userVote">) => {
     const newMovie: Movie = {
-      ...movie,
       id: Date.now().toString(),
-      likes: 0,
-      dislikes: 0,
+      ...movie,
+      votes: { up: 0, down: 0 },
+      userVote: null,
     }
-    setMovies([...movies, newMovie])
-  }
+    setMovies((prev) => [...prev, newMovie])
+  }, [])
 
-  const voteForMovie = (id: string, voteType: VoteType) => {
-    setMovies(
-      movies.map((movie) =>
-        movie.id === id
-          ? {
-              ...movie,
-              likes: voteType === "like" ? movie.likes + 1 : movie.likes,
-              dislikes: voteType === "dislike" ? movie.dislikes + 1 : movie.dislikes,
-            }
-          : movie,
-      ),
+  const voteMovie = useCallback((id: string, voteType: "up" | "down" | null) => {
+    setMovies((prev) =>
+      prev.map((movie) => {
+        if (movie.id === id) {
+          // Calculate new vote counts based on previous vote and new vote
+          let upVotes = movie.votes.up
+          let downVotes = movie.votes.down
+
+          // Remove previous vote if exists
+          if (movie.userVote === "up") upVotes--
+          if (movie.userVote === "down") downVotes--
+
+          // Add new vote if not null
+          if (voteType === "up") upVotes++
+          if (voteType === "down") downVotes++
+
+          return {
+            ...movie,
+            votes: { up: upVotes, down: downVotes },
+            userVote: voteType,
+          }
+        }
+        return movie
+      }),
     )
-  }
+  }, [])
 
-  const scheduleMovie = (movieId: string, date: Date) => {
-    setScheduledMovies([...scheduledMovies, { movieId, date, attendees: [] }])
-  }
+  const scheduleMovieNight = useCallback((movieId: string, date: Date) => {
+    const newMovieNight: MovieNight = {
+      id: Date.now().toString(),
+      movieId,
+      date,
+      attendees: [], // Start with an empty attendees array
+    }
+    // Use the functional update form to ensure we're working with the latest state
+    setMovieNights((prev) => [...prev, newMovieNight])
+  }, [])
 
-  const markAvailability = (movieId: string, name: string) => {
-    setScheduledMovies(
-      scheduledMovies.map((scheduled) =>
-        scheduled.movieId === movieId ? { ...scheduled, attendees: [...scheduled.attendees, name] } : scheduled,
-      ),
+  const toggleAttendance = useCallback((movieNightId: string, attendeeId: string) => {
+    setMovieNights((prev) =>
+      prev.map((night) => {
+        if (night.id === movieNightId) {
+          return {
+            ...night,
+            attendees: night.attendees.map((attendee) => {
+              if (attendee.id === attendeeId) {
+                return {
+                  ...attendee,
+                  isAttending: !attendee.isAttending,
+                }
+              }
+              return attendee
+            }),
+          }
+        }
+        return night
+      }),
     )
-  }
+  }, [])
+
+  // Memoize props for child components to prevent unnecessary re-renders
+  const movieSuggestionsProps = useMemo(
+    () => ({
+      movies,
+      onAddMovie: addMovie,
+      onVote: voteMovie,
+    }),
+    [movies, addMovie, voteMovie],
+  )
+
+  const scheduleAvailabilityProps = useMemo(
+    () => ({
+      movies,
+      movieNights,
+      onSchedule: scheduleMovieNight,
+      onToggleAttendance: toggleAttendance,
+      setMovieNights,
+    }),
+    [movies, movieNights, scheduleMovieNight, toggleAttendance, setMovieNights],
+  )
 
   return (
-    <Tabs defaultValue="suggestions" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="suggestions">Movie Suggestions</TabsTrigger>
-        <TabsTrigger value="schedule">Schedule & Availability</TabsTrigger>
-      </TabsList>
-      <TabsContent value="suggestions">
-        <MovieSuggestions movies={movies} onAddMovie={addMovie} onVote={voteForMovie} />
-      </TabsContent>
-      <TabsContent value="schedule">
-        <ScheduleViewing
-          movies={movies}
-          scheduledMovies={scheduledMovies}
-          onScheduleMovie={scheduleMovie}
-          onMarkAvailability={markAvailability}
-        />
-      </TabsContent>
-    </Tabs>
+    <ThemeProvider attribute="class" defaultTheme="light">
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-center">Movie Night Planner</h1>
+
+        <Tabs defaultValue="suggestions" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="suggestions">Movies</TabsTrigger>
+            <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="suggestions">
+            <Suspense fallback={<MovieSuggestionsFallback />}>
+              <MovieSuggestions {...movieSuggestionsProps} />
+            </Suspense>
+          </TabsContent>
+
+          <TabsContent value="schedule">
+            <Suspense fallback={<ScheduleAvailabilityFallback />}>
+              <ScheduleAvailability {...scheduleAvailabilityProps} />
+            </Suspense>
+          </TabsContent>
+        </Tabs>
+      </div>
+      <Toaster />
+    </ThemeProvider>
   )
 }
 

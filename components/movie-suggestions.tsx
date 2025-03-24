@@ -1,36 +1,161 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, memo, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog"
-import { ThumbsUp, ThumbsDown } from "lucide-react"
-import type { Movie, VoteType } from "@/lib/types"
-import { movieSchema, type MovieFormValues } from "@/lib/schemas"
-import Image from "next/image"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { ThumbsUp, ThumbsDown, Info, Film } from "lucide-react"
+import { z } from "zod"
+import { useToast } from "@/components/ui/use-toast"
+import type { Movie } from "@/lib/types"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { ScrollArea } from "./ui/scroll-area"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { cn } from "@/lib/utils"
+import Image from "next/image"
+
+const movieSchema = z.object({
+  title: z.string().min(1, "Movie title is required").max(50, "Title must be 50 characters or less"),
+  description: z
+    .string()
+    .min(10, "Description must be at least 10 characters")
+    .max(500, "Description must be 500 characters or less"),
+})
+
+type MovieFormValues = z.infer<typeof movieSchema>
 
 interface MovieSuggestionsProps {
   movies: Movie[]
-  onAddMovie: (movie: Omit<Movie, "id" | "likes" | "dislikes">) => void
-  onVote: (id: string, voteType: VoteType) => void
+  onAddMovie: (movie: Omit<Movie, "id" | "votes" | "userVote">) => void
+  onVote: (id: string, voteType: "up" | "down" | null) => void
 }
 
-export default function MovieSuggestions({ movies, onAddMovie, onVote }: MovieSuggestionsProps) {
+// Empty state component for when there are no movies
+const NoMovies = memo(() => (
+  <div className="col-span-full flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+    <Film className="h-16 w-16 mb-4 opacity-20" />
+    <h3 className="text-xl font-medium mb-2">No movies suggested yet</h3>
+    <p className="max-w-md mb-6">
+      Get started by suggesting a movie you'd like to watch. Click the "Suggest Movie" button to add your first movie.
+    </p>
+  </div>
+))
+
+NoMovies.displayName = "NoMovies"
+
+// Memoize the MovieCard component to prevent unnecessary re-renders
+const MovieCard = memo(
+  ({
+    movie,
+    onVote,
+    onOpenDetails,
+  }: {
+    movie: Movie
+    onVote: (id: string, voteType: "up" | "down" | null) => void
+    onOpenDetails: (movie: Movie) => void
+  }) => {
+    const { toast } = useToast()
+
+    const handleVote = useCallback(
+      (voteType: "up" | "down") => {
+        // If user already voted this way, remove the vote
+        if (movie.userVote === voteType) {
+          onVote(movie.id, null)
+          toast({
+            title: "Vote removed",
+            description: `You removed your vote ${voteType === "up" ? "for" : "against"} "${movie.title}"`,
+          })
+        } else {
+          // Otherwise, set the vote
+          onVote(movie.id, voteType)
+          toast({
+            title: "Vote recorded",
+            description: `You voted ${voteType === "up" ? "for" : "against"} "${movie.title}"`,
+          })
+        }
+      },
+      [movie, onVote, toast],
+    )
+
+    return (
+      <Card className="overflow-hidden h-[250px] flex flex-col">
+        <CardContent className="p-6 grid grid-cols-[80px_1fr] gap-4 flex-1 overflow-hidden">
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-md aspect-square overflow-hidden">
+            <Image
+              src={`/placeholder.svg?height=80&width=80`}
+              alt={movie.title}
+              width={80}
+              height={80}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              sizes="80px"
+            />
+          </div>
+          <div className="overflow-hidden flex flex-col">
+            <h3 className="text-xl font-bold line-clamp-1">{movie.title}</h3>
+            <p className="text-gray-600 dark:text-gray-300 mt-2 line-clamp-3">{movie.description}</p>
+          </div>
+        </CardContent>
+        <CardFooter className="border-t p-4 flex justify-between">
+          <div className="flex gap-2">
+            <Button
+              variant={movie.userVote === "up" ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "flex items-center gap-1",
+                movie.userVote === "up"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "hover:border-green-500 hover:text-green-500",
+              )}
+              onClick={() => handleVote("up")}
+            >
+              <ThumbsUp className="h-4 w-4" />
+              <span>{movie.votes.up}</span>
+            </Button>
+            <Button
+              variant={movie.userVote === "down" ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "flex items-center gap-1",
+                movie.userVote === "down" ? "bg-red-600 hover:bg-red-700" : "hover:border-red-500 hover:text-red-500",
+              )}
+              onClick={() => handleVote("down")}
+            >
+              <ThumbsDown className="h-4 w-4" />
+              <span>{movie.votes.down}</span>
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-gray-500 hover:text-gray-700"
+            onClick={() => onOpenDetails(movie)}
+          >
+            <Info className="h-4 w-4 mr-1" />
+            Details
+          </Button>
+        </CardFooter>
+      </Card>
+    )
+  },
+)
+
+MovieCard.displayName = "MovieCard"
+
+export function MovieSuggestions({ movies, onAddMovie, onVote }: MovieSuggestionsProps) {
   const [open, setOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null)
+  const { toast } = useToast()
 
   const form = useForm<MovieFormValues>({
     resolver: zodResolver(movieSchema),
@@ -40,117 +165,149 @@ export default function MovieSuggestions({ movies, onAddMovie, onVote }: MovieSu
     },
   })
 
-  const onSubmit = (values: MovieFormValues) => {
-    onAddMovie({
-      title: values.title,
-      description: values.description || "",
-      imageUrl: "/placeholder.svg?height=150&width=100",
-    })
-    form.reset()
-    setOpen(false)
-  }
+  const onSubmit = useCallback(
+    (data: MovieFormValues) => {
+      onAddMovie(data)
+      setOpen(false)
+      form.reset()
+      toast({
+        title: "Movie added",
+        description: `"${data.title}" has been added to suggestions`,
+      })
+    },
+    [onAddMovie, setOpen, form, toast],
+  )
+
+  const openDetails = useCallback((movie: Movie) => {
+    setSelectedMovie(movie)
+    setDetailsOpen(true)
+  }, [])
+
+  // Memoize the movie cards to prevent unnecessary re-renders
+  const movieCards = useMemo(
+    () => movies.map((movie) => <MovieCard key={movie.id} movie={movie} onVote={onVote} onOpenDetails={openDetails} />),
+    [movies, onVote, openDetails],
+  )
+
+  const handleOpenDialog = useCallback(() => {
+    setOpen(true)
+  }, [])
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Movie Suggestions</h2>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>Suggest Movie</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Suggest a Movie</DialogTitle>
-              <DialogDescription>Share a movie you'd like to watch together</DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Movie Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter movie title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Brief description of the movie" rows={3} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="submit">Add Movie</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+      <div className="flex justify-between items-center py-4">
+        <h2 className="text-2xl font-bold">Movies</h2>
+        <Button onClick={handleOpenDialog}>Suggest Movie</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {movies.map((movie) => (
-          <Card key={movie.id} className="overflow-hidden h-full flex flex-col">
-            <div className="flex flex-1">
-              <div className="flex-shrink-0 p-4">
-                <Image
-                  src={movie.imageUrl || "/placeholder.svg"}
-                  alt={movie.title}
-                  width={100}
-                  height={150}
-                  className="rounded-md object-cover"
-                />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{movies.length > 0 ? movieCards : <NoMovies />}</div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Suggest a Movie</DialogTitle>
+            <DialogDescription>Share a movie you'd like to watch together</DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Movie Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter movie title" {...field} maxLength={50} />
+                    </FormControl>
+                    <div className="text-xs text-muted-foreground text-right">{field.value.length}/50</div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Brief description of the movie"
+                        className="min-h-[100px]"
+                        {...field}
+                        maxLength={500}
+                      />
+                    </FormControl>
+                    <div className="text-xs text-muted-foreground text-right">{field.value.length}/500</div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end gap-2">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button type="submit">Add Movie</Button>
               </div>
-              <div className="flex-1 flex flex-col min-w-0">
-                <CardHeader className="pb-2 flex-1">
-                  <div className="w-full overflow-hidden">
-                    <CardTitle className="text-lg truncate w-full">{movie.title}</CardTitle>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+          {selectedMovie && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selectedMovie.title}</DialogTitle>
+              </DialogHeader>
+
+              <div className="grid grid-cols-[120px_1fr] gap-4 mt-4 overflow-hidden flex-1">
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-md aspect-square overflow-hidden">
+                  <Image
+                    src={`/placeholder.svg?height=120&width=120`}
+                    alt={selectedMovie.title}
+                    width={120}
+                    height={120}
+                    className="w-full h-full object-cover"
+                    sizes="120px"
+                    priority
+                  />
+                </div>
+                <div className="overflow-hidden flex flex-col">
+                  <div className="prose dark:prose-invert max-w-none overflow-y-auto pr-1 flex-1">
+                    <p>{selectedMovie.description}</p>
                   </div>
-                  <CardDescription>
-                    <ScrollArea className="h-[4.5rem]">{movie.description}</ScrollArea>
-                  </CardDescription>
-                </CardHeader>
-                <CardFooter className="pt-0 mt-auto">
-                  <div className="w-full">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 hover:bg-green-100 hover:text-green-700 hover:border-green-300 transition-colors"
-                        onClick={() => onVote(movie.id, "like")}
-                      >
-                        <ThumbsUp className="h-4 w-4 mr-1" />
-                        {movie.likes}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 hover:bg-red-100 hover:text-red-700 hover:border-red-300 transition-colors"
-                        onClick={() => onVote(movie.id, "dislike")}
-                      >
-                        <ThumbsDown className="h-4 w-4 mr-1" />
-                        {movie.dislikes}
-                      </Button>
+
+                  <div className="flex gap-3 mt-6">
+                    <div className="flex items-center gap-1 text-sm">
+                      <ThumbsUp
+                        className={cn("h-4 w-4", selectedMovie.votes.up > 0 ? "text-green-500" : "text-gray-400")}
+                      />
+                      <span>{selectedMovie.votes.up} votes</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm">
+                      <ThumbsDown
+                        className={cn("h-4 w-4", selectedMovie.votes.down > 0 ? "text-red-500" : "text-gray-400")}
+                      />
+                      <span>{selectedMovie.votes.down} votes</span>
                     </div>
                   </div>
-                </CardFooter>
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+
+              <div className="flex justify-end mt-4">
+                <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
