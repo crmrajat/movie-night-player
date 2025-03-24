@@ -57,7 +57,6 @@ type ScheduleFormValues = z.infer<typeof scheduleSchema>
 // Empty state component for when there are no attendees
 const NoAttendees = memo(() => (
   <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
-    <Users className="h-10 w-10 mb-2 opacity-20" />
     <p>No attendees yet</p>
     <p className="text-sm">Add attendees using the form below</p>
   </div>
@@ -285,7 +284,7 @@ const MovieNightCard = memo(
       <Card className="overflow-hidden h-[350px] flex flex-col">
         <CardContent className="p-6 flex-1 overflow-hidden flex flex-col">
           <div className="flex justify-between items-start">
-            <div>
+            <div className="overflow-hidden">
               <h3 className="text-xl font-bold">{movie.title}</h3>
               <p className="text-gray-600 dark:text-gray-300 mt-1">{formattedDate}</p>
             </div>
@@ -481,6 +480,8 @@ export function ScheduleAvailability({
     }
   }, [nightToDelete, onRemoveMovieNight, toast])
 
+  const noMovieNightsComponent = useMemo(() => <NoMovieNights />, [])
+
   const movieNightCards = useMemo(() => {
     return localMovieNights.map((night) => (
       <MovieNightCard
@@ -498,6 +499,8 @@ export function ScheduleAvailability({
     setOpen(true)
   }, [])
 
+  const hasMovieNights = localMovieNights.length > 0
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center py-4">
@@ -511,7 +514,7 @@ export function ScheduleAvailability({
         <h3 className="text-xl font-bold mb-4">Upcoming Movie Nights</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {localMovieNights.length > 0 ? movieNightCards : <NoMovieNights />}
+          {hasMovieNights ? movieNightCards : noMovieNightsComponent}
         </div>
       </div>
 

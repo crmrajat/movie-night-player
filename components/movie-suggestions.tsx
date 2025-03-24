@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ThumbsUp, ThumbsDown, Info, Film, Trash } from "lucide-react"
+import { ThumbsUp, ThumbsDown, Info, Film, Trash, MoreVertical } from "lucide-react"
 import { z } from "zod"
 import { useToast } from "@/components/ui/use-toast"
 import type { Movie } from "@/lib/types"
@@ -32,6 +32,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const movieSchema = z.object({
   title: z.string().min(1, "Movie title is required").max(50, "Title must be 50 characters or less"),
@@ -147,25 +154,25 @@ const MovieCard = memo(
               <span>{movie.votes.down}</span>
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-gray-500 hover:text-gray-700 h-8 px-2"
-              onClick={() => onOpenDetails(movie)}
-            >
-              <Info className="h-4 w-4 mr-1" />
-              Details
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 px-2"
-              onClick={() => onDeleteMovie(movie.id)}
-            >
-              <Trash className="h-4 w-4 mr-1" />
-              Delete
-            </Button>
+          <div className="flex">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onOpenDetails(movie)}>
+                  <Info className="h-4 w-4 mr-2" />
+                  <span>Details</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onDeleteMovie(movie.id)} className="text-red-500 focus:text-red-500">
+                  <Trash className="h-4 w-4 mr-2" />
+                  <span>Delete</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardFooter>
       </Card>
