@@ -1,8 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useCallback, memo, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +17,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ThumbsUp, ThumbsDown, Info, Film, Trash, MoreVertical } from "lucide-react"
 import { z } from "zod"
-import { useToast } from "@/components/ui/use-toast"
 import type { Movie } from "@/lib/types"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useForm } from "react-hook-form"
@@ -83,98 +84,106 @@ const MovieCard = memo(
     onOpenDetails: (movie: Movie) => void
     onDeleteMovie: (id: string) => void
   }) => {
-    const { toast } = useToast()
-
     const handleVote = useCallback(
       (voteType: "up" | "down") => {
         // If user already voted this way, remove the vote
         if (movie.userVote === voteType) {
           onVote(movie.id, null)
-          toast({
-            title: "Vote removed",
-            description: `You removed your vote ${voteType === "up" ? "for" : "against"} "${movie.title}"`,
-          })
         } else {
           // Otherwise, set the vote
           onVote(movie.id, voteType)
-          toast({
-            title: "Vote recorded",
-            description: `You voted ${voteType === "up" ? "for" : "against"} "${movie.title}"`,
-          })
         }
       },
-      [movie, onVote, toast],
+      [movie, onVote],
     )
 
+    // Prevent event propagation for buttons inside the card
+    const handleButtonClick = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation()
+    }, [])
+
     return (
-      <Card className="overflow-hidden h-[250px] flex flex-col shadow-md hover:shadow-lg transition-shadow duration-300">
-        <CardContent className="p-0 flex-1 overflow-hidden flex">
-          <div className="bg-gray-100 dark:bg-gray-800 w-1/3 max-w-[120px] overflow-hidden">
+      <Card className="group overflow-hidden h-[280px] flex flex-col shadow-sm hover:shadow-md transition-all duration-300 border-gray-200 dark:border-gray-800">
+        <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
+          <div className="relative w-full h-[140px] overflow-hidden bg-gray-100 dark:bg-gray-800">
             <Image
-              src={`/placeholder.svg?height=120&width=120`}
+              src={`/placeholder.svg?height=280&width=500`}
               alt={movie.title}
-              width={120}
-              height={120}
+              width={500}
+              height={280}
               className="w-full h-full object-cover"
               loading="lazy"
-              sizes="120px"
+              sizes="(max-width: 768px) 100vw, 50vw"
             />
+            <div className="absolute top-2 right-2 z-10" onClick={handleButtonClick}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-8 w-8 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white dark:bg-black/50 dark:hover:bg-black/70"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[150px]">
+                  <DropdownMenuItem onClick={() => onOpenDetails(movie)} className="cursor-pointer">
+                    <Info className="h-4 w-4 mr-2" />
+                    <span>Details</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onDeleteMovie(movie.id)}
+                    className="text-red-500 focus:text-red-500 cursor-pointer"
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    <span>Delete</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
+
           <div className="p-4 flex-1 flex flex-col">
-            <h3 className="text-xl font-bold line-clamp-1 mb-2">{movie.title}</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-4 flex-1">{movie.description}</p>
+            <h3 className="text-lg font-semibold line-clamp-1 group-hover:text-primary transition-colors">
+              {movie.title}
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 mt-1 flex-1">{movie.description}</p>
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 px-3 rounded-md",
+                    movie.userVote === "up"
+                      ? "border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-green-950/20"
+                      : "hover:border-green-500 hover:text-green-500",
+                  )}
+                  onClick={() => handleVote("up")}
+                >
+                  <ThumbsUp className={cn("h-4 w-4 mr-1", movie.userVote === "up" ? "text-green-500" : "")} />
+                  <span>{movie.votes.up}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 px-3 rounded-md",
+                    movie.userVote === "down"
+                      ? "border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      : "hover:border-red-500 hover:text-red-500",
+                  )}
+                  onClick={() => handleVote("down")}
+                >
+                  <ThumbsDown className={cn("h-4 w-4 mr-1", movie.userVote === "down" ? "text-red-500" : "")} />
+                  <span>{movie.votes.down}</span>
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
-        <CardFooter className="border-t p-3 flex justify-between bg-gray-50 dark:bg-gray-800/50">
-          <div className="flex gap-2">
-            <Button
-              variant={movie.userVote === "up" ? "default" : "outline"}
-              size="sm"
-              className={cn(
-                "flex items-center gap-1 h-8 px-2",
-                movie.userVote === "up"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "hover:border-green-500 hover:text-green-500",
-              )}
-              onClick={() => handleVote("up")}
-            >
-              <ThumbsUp className="h-4 w-4" />
-              <span>{movie.votes.up}</span>
-            </Button>
-            <Button
-              variant={movie.userVote === "down" ? "default" : "outline"}
-              size="sm"
-              className={cn(
-                "flex items-center gap-1 h-8 px-2",
-                movie.userVote === "down" ? "bg-red-600 hover:bg-red-700" : "hover:border-red-500 hover:text-red-500",
-              )}
-              onClick={() => handleVote("down")}
-            >
-              <ThumbsDown className="h-4 w-4" />
-              <span>{movie.votes.down}</span>
-            </Button>
-          </div>
-          <div className="flex">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onOpenDetails(movie)}>
-                  <Info className="h-4 w-4 mr-2" />
-                  <span>Details</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onDeleteMovie(movie.id)} className="text-red-500 focus:text-red-500">
-                  <Trash className="h-4 w-4 mr-2" />
-                  <span>Delete</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardFooter>
       </Card>
     )
   },
@@ -186,7 +195,6 @@ export function MovieSuggestions({ movies, onAddMovie, onVote, onDeleteMovie }: 
   const [open, setOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null)
-  const { toast } = useToast()
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [movieToDelete, setMovieToDelete] = useState<string | null>(null)
 
@@ -203,12 +211,8 @@ export function MovieSuggestions({ movies, onAddMovie, onVote, onDeleteMovie }: 
       onAddMovie(data)
       setOpen(false)
       form.reset()
-      toast({
-        title: "Movie added",
-        description: `"${data.title}" has been added to suggestions`,
-      })
     },
-    [onAddMovie, setOpen, form, toast],
+    [onAddMovie, setOpen, form],
   )
 
   const openDetails = useCallback((movie: Movie) => {
@@ -226,12 +230,8 @@ export function MovieSuggestions({ movies, onAddMovie, onVote, onDeleteMovie }: 
       onDeleteMovie(movieToDelete)
       setMovieToDelete(null)
       setDeleteConfirmOpen(false)
-      toast({
-        title: "Movie deleted",
-        description: "The movie has been removed from suggestions",
-      })
     }
-  }, [movieToDelete, onDeleteMovie, toast])
+  }, [movieToDelete, onDeleteMovie])
 
   // Memoize the movie cards to prevent unnecessary re-renders
   const movieCards = useMemo(

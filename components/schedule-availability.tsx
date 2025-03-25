@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { z } from "zod"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import type { Movie, MovieNight, Attendee } from "@/lib/types"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useForm } from "react-hook-form"
@@ -87,6 +87,7 @@ const AttendeeList = memo(
     onRemoveAttendee: (attendeeId: string) => void
   }) => {
     const [attendeeToRemove, setAttendeeToRemove] = useState<string | null>(null)
+    // Remove the deletedAttendees state as it's not needed and causing issues
 
     const handleRemoveClick = useCallback((attendeeId: string) => {
       setAttendeeToRemove(attendeeId)
@@ -94,10 +95,19 @@ const AttendeeList = memo(
 
     const handleConfirmRemove = useCallback(() => {
       if (attendeeToRemove) {
-        onRemoveAttendee(attendeeToRemove)
-        setAttendeeToRemove(null)
+        // Find the attendee to delete for potential undo
+        const attendeeToDelete = attendees.find((a) => a.id === attendeeToRemove)
+
+        // Only proceed with removal if we found the attendee
+        if (attendeeToDelete) {
+          // Call the parent's remove function only once
+          onRemoveAttendee(attendeeToRemove)
+          setAttendeeToRemove(null)
+
+          // We don't need to show a toast here as it will be handled by the parent component
+        }
       }
-    }, [attendeeToRemove, onRemoveAttendee])
+    }, [attendeeToRemove, onRemoveAttendee, attendees])
 
     const handleCancelRemove = useCallback(() => {
       setAttendeeToRemove(null)
@@ -113,7 +123,7 @@ const AttendeeList = memo(
       attendees.length === 0 ? (
         <NoAttendees />
       ) : (
-        <ul className="mt-2 space-y-1 overflow-y-auto flex-1 pr-1">
+        <ul className="mt-2 space-y-1 overflow-y-auto flex-1 pr-1 max-h-[250px]">
           {visibleAttendees.map((attendee) => (
             <li key={attendee.id} className="flex items-center justify-between gap-2 group">
               <div className="flex items-center gap-2">
@@ -239,7 +249,7 @@ const AddAttendeeForm = memo(
           </div>
           <Button onClick={handleAddAttendee} className="flex-shrink-0">
             <PlusCircle className="h-4 w-4 mr-2" />
-            Add Attendee
+            Add
           </Button>
         </div>
         {error && <p className="text-sm text-red-500">{error}</p>}
@@ -281,7 +291,7 @@ const MovieNightCard = memo(
     )
 
     return (
-      <Card className="overflow-hidden h-[350px] flex flex-col">
+      <Card className="overflow-hidden h-[450px] flex flex-col">
         <CardContent className="p-6 flex-1 overflow-hidden flex flex-col">
           <div className="flex justify-between items-start">
             <div className="overflow-hidden">
@@ -298,7 +308,7 @@ const MovieNightCard = memo(
             </Button>
           </div>
 
-          <div className="mt-4 flex-1 overflow-hidden flex flex-col">
+          <div className="mt-4 flex-1 overflow-hidden flex flex-col" style={{ minHeight: "280px" }}>
             <h4 className="font-medium flex items-center gap-1">
               <Users className="h-4 w-4" />
               Attendees ({attendeeCount})
@@ -334,7 +344,7 @@ export function ScheduleAvailability({
   onRemoveMovieNight,
 }: ScheduleAvailabilityProps) {
   const [open, setOpen] = useState(false)
-  const { toast } = useToast()
+  const [deletedAttendees, setDeletedAttendees] = useState<{ nightId: string; attendee: Attendee }[]>([])
 
   // Use state instead of ref for real-time updates
   const [localMovieNights, setLocalMovieNights] = useState<MovieNight[]>(movieNights)
@@ -356,12 +366,8 @@ export function ScheduleAvailability({
       onSchedule(data.movieId, data.date)
       setOpen(false)
       form.reset()
-      toast({
-        title: "Movie night scheduled",
-        description: `Movie night has been scheduled for ${format(data.date, "EEEE, MMMM d, yyyy")}`,
-      })
     },
-    [onSchedule, setOpen, form, toast],
+    [onSchedule, setOpen, form],
   )
 
   // Memoize getMovieById function with useCallback
@@ -379,11 +385,7 @@ export function ScheduleAvailability({
       if (!night) return
 
       if (night.attendees.some((a) => a.name.toLowerCase() === name.toLowerCase())) {
-        toast({
-          title: "Duplicate attendee",
-          description: `${name} is already in the attendee list`,
-          variant: "destructive",
-        })
+        toast.error(`${name} is already in the attendee list`)
         return
       }
 
@@ -411,16 +413,30 @@ export function ScheduleAvailability({
       // Also update the parent state
       setMovieNights(updatedNights)
 
-      toast({
-        title: "Attendee added",
-        description: `${name} has been added to the attendee list`,
-      })
+      toast.success(`${name} has been added to the attendee list`)
     },
-    [localMovieNights, toast, setMovieNights],
+    [localMovieNights, setMovieNights],
   )
 
   const handleRemoveAttendee = useCallback(
     (nightId: string, attendeeId: string) => {
+      // Find the night and attendee for undo functionality
+      const night = localMovieNights.find((n) => n.id === nightId)
+      if (!night) return
+
+      const attendeeToRemove = night.attendees.find((a) => a.id === attendeeId)
+      if (!attendeeToRemove) return
+
+      // Check if this attendee is already in the deleted list to prevent duplicates
+      const alreadyDeleted = deletedAttendees.some(
+        (item) => item.nightId === nightId && item.attendee.id === attendeeId,
+      )
+
+      if (alreadyDeleted) return
+
+      // Store for potential undo
+      setDeletedAttendees((prev) => [...prev, { nightId, attendee: attendeeToRemove }])
+
       // Create updated movie nights array without the removed attendee
       const updatedNights = localMovieNights.map((n) => {
         if (n.id === nightId) {
@@ -438,12 +454,46 @@ export function ScheduleAvailability({
       // Also update the parent state
       setMovieNights(updatedNights)
 
-      toast({
-        title: "Attendee removed",
-        description: "The attendee has been removed from the list",
+      // Show toast with undo button - only once per attendee
+      toast.error(`${attendeeToRemove.name} has been removed`, {
+        id: `remove-attendee-${attendeeId}`, // Add a unique ID to prevent duplicates
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // Restore the attendee
+            const restoredNights = localMovieNights.map((n) => {
+              if (n.id === nightId) {
+                // Check if the attendee is already in the list to prevent duplicates
+                const attendeeExists = n.attendees.some((a) => a.id === attendeeToRemove.id)
+                if (attendeeExists) return n
+
+                return {
+                  ...n,
+                  attendees: [...n.attendees, attendeeToRemove],
+                }
+              }
+              return n
+            })
+
+            // Update states
+            setLocalMovieNights(restoredNights)
+            setMovieNights(restoredNights)
+
+            // Remove from deleted items
+            setDeletedAttendees((prev) =>
+              prev.filter((item) => !(item.nightId === nightId && item.attendee.id === attendeeId)),
+            )
+
+            // Show success toast
+            toast.success(`${attendeeToRemove.name} has been restored`, {
+              id: `restore-attendee-${attendeeId}`, // Add a unique ID to prevent duplicates
+            })
+          },
+        },
+        duration: 5000, // 5 seconds to undo
       })
     },
-    [localMovieNights, toast, setMovieNights],
+    [localMovieNights, setMovieNights, deletedAttendees],
   )
 
   // Memoize the movie options to prevent unnecessary re-renders
@@ -473,12 +523,8 @@ export function ScheduleAvailability({
       onRemoveMovieNight(nightToDelete)
       setNightToDelete(null)
       setDeleteConfirmOpen(false)
-      toast({
-        title: "Movie night deleted",
-        description: "The movie night has been removed from the schedule",
-      })
     }
-  }, [nightToDelete, onRemoveMovieNight, toast])
+  }, [nightToDelete, onRemoveMovieNight])
 
   const noMovieNightsComponent = useMemo(() => <NoMovieNights />, [])
 
@@ -501,21 +547,25 @@ export function ScheduleAvailability({
 
   const hasMovieNights = localMovieNights.length > 0
 
+  // Determine whether to render the NoMovieNights component
+  const shouldRenderNoMovieNights = !hasMovieNights
+
+  // Memoize the movie night cards or the NoMovieNights component
+  const movieNightContent = shouldRenderNoMovieNights ? noMovieNightsComponent : movieNightCards
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center py-4">
         <h2 className="text-2xl font-bold">Schedule</h2>
         <Button onClick={handleOpenDialog} disabled={!hasMovies}>
-          Schedule Movie Night
+          Add Event
         </Button>
       </div>
 
       <div>
         <h3 className="text-xl font-bold mb-4">Upcoming Movie Nights</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {hasMovieNights ? movieNightCards : noMovieNightsComponent}
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{movieNightContent}</div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
