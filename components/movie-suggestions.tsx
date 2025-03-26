@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useCallback, memo, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -97,11 +95,6 @@ const MovieCard = memo(
       [movie, onVote],
     )
 
-    // Prevent event propagation for buttons inside the card
-    const handleButtonClick = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation()
-    }, [])
-
     return (
       <Card className="group overflow-hidden h-[280px] flex flex-col shadow-sm hover:shadow-md transition-all duration-300 border-gray-200 dark:border-gray-800">
         <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
@@ -115,7 +108,7 @@ const MovieCard = memo(
               loading="lazy"
               sizes="(max-width: 768px) 100vw, 50vw"
             />
-            <div className="absolute top-2 right-2 z-10" onClick={handleButtonClick}>
+            <div className="absolute top-2 right-2 z-10">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -127,15 +120,12 @@ const MovieCard = memo(
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[150px]">
-                  <DropdownMenuItem onClick={() => onOpenDetails(movie)} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => onOpenDetails(movie)}>
                     <Info className="h-4 w-4 mr-2" />
                     <span>Details</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => onDeleteMovie(movie.id)}
-                    className="text-red-500 focus:text-red-500 cursor-pointer"
-                  >
+                  <DropdownMenuItem onClick={() => onDeleteMovie(movie.id)} className="text-red-500 focus:text-red-500">
                     <Trash className="h-4 w-4 mr-2" />
                     <span>Delete</span>
                   </DropdownMenuItem>

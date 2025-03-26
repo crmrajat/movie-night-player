@@ -548,7 +548,10 @@ export function ScheduleAvailability({
   const hasMovieNights = localMovieNights.length > 0
 
   // Determine whether to render the NoMovieNights component
-  const shouldRenderNoMovieNights = !hasMovieNights
+  let shouldRenderNoMovieNights = false
+  if (!hasMovieNights) {
+    shouldRenderNoMovieNights = true
+  }
 
   // Memoize the movie night cards or the NoMovieNights component
   const movieNightContent = shouldRenderNoMovieNights ? noMovieNightsComponent : movieNightCards

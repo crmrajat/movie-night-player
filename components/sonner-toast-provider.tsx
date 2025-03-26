@@ -8,7 +8,7 @@ export function SonnerToastProvider() {
 
   return (
     <SonnerToaster
-      position="bottom-right"
+      position="top-right"
       toastOptions={{
         style: {
           fontSize: "14px",
@@ -17,7 +17,6 @@ export function SonnerToastProvider() {
       }}
       theme={theme as "light" | "dark" | "system"}
       richColors
-      closeButton
     />
   )
 }

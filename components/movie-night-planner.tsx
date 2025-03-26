@@ -1,14 +1,15 @@
 "use client"
 
 import { useState, useCallback, lazy, Suspense, useMemo } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SonnerToastProvider } from "@/components/sonner-toast-provider"
 import type { Movie, MovieNight } from "@/lib/types"
 import { toast } from "sonner"
 import { format } from "date-fns"
+import { Film, CalendarIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
-// Use lazy loading for components with explicit chunk names for better caching
 const MovieSuggestions = lazy(() =>
   import("@/components/movie-suggestions").then((mod) => ({ default: mod.MovieSuggestions })),
 )
@@ -38,13 +39,73 @@ const ScheduleAvailabilityFallback = () => (
 )
 
 export default function MovieNightPlanner() {
-  // Start with empty arrays instead of hardcoded data
-  const [movies, setMovies] = useState<Movie[]>([])
-  const [movieNights, setMovieNights] = useState<MovieNight[]>([])
+  const [activeTab, setActiveTab] = useState<"suggestions" | "schedule">("suggestions")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Movie state management
+  const [movies, setMovies] = useState<Movie[]>([
+    {
+      id: "1",
+      title: "Inception",
+      description:
+        "A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
+      votes: { up: 15, down: 3 },
+      userVote: null,
+    },
+    {
+      id: "2",
+      title: "The Shawshank Redemption",
+      description:
+        "Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.",
+      votes: { up: 20, down: 1 },
+      userVote: null,
+    },
+    {
+      id: "3",
+      title: "Pulp Fiction",
+      description:
+        "The lives of two mob hitmen, a boxer, a gangster and his wife, and a pair of diner bandits intertwine in four tales of violence and redemption.",
+      votes: { up: 12, down: 5 },
+      userVote: null,
+    },
+    {
+      id: "4",
+      title: "The Dark Knight",
+      description:
+        "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
+      votes: { up: 18, down: 2 },
+      userVote: null,
+    },
+  ])
+
+  // Movie night state management
+  const [movieNights, setMovieNights] = useState<MovieNight[]>([
+    {
+      id: "101",
+      movieId: "1",
+      date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // One week from now
+      attendees: [
+        { id: "a1", name: "Alex", isAttending: true },
+        { id: "a2", name: "Jamie", isAttending: true },
+        { id: "a3", name: "Taylor", isAttending: false },
+      ],
+    },
+    {
+      id: "102",
+      movieId: "3",
+      date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Two weeks from now
+      attendees: [
+        { id: "a4", name: "Jordan", isAttending: true },
+        { id: "a5", name: "Casey", isAttending: true },
+        { id: "a6", name: "Riley", isAttending: true },
+        { id: "a7", name: "Morgan", isAttending: false },
+      ],
+    },
+  ])
   const [deletedMovies, setDeletedMovies] = useState<Movie[]>([])
   const [deletedMovieNights, setDeletedMovieNights] = useState<MovieNight[]>([])
 
-  // Use useCallback to memoize callback functions
+  // Callback functions
   const addMovie = useCallback((movie: Omit<Movie, "id" | "votes" | "userVote">) => {
     const newMovie: Movie = {
       id: Date.now().toString(),
@@ -75,9 +136,9 @@ export default function MovieNightPlanner() {
           // Show appropriate toast
           if (voteType === null) {
             if (movie.userVote === "up") {
-              toast(`You removed your vote for "${movie.title}"`)
+              toast.error(`You removed your vote for "${movie.title}"`)
             } else if (movie.userVote === "down") {
-              toast(`You removed your vote against "${movie.title}"`)
+              toast.error(`You removed your vote against "${movie.title}"`)
             }
           } else {
             toast.success(`You voted ${voteType === "up" ? "for" : "against"} "${movie.title}"`)
@@ -136,7 +197,7 @@ export default function MovieNightPlanner() {
     )
   }, [])
 
-  // Add a function to delete a movie with undo functionality:
+  // Delete movie with undo functionality
   const deleteMovie = useCallback(
     (id: string) => {
       // Find the movie to delete
@@ -191,7 +252,7 @@ export default function MovieNightPlanner() {
     [movies, movieNights],
   )
 
-  // Add a function to remove a movie night with undo functionality:
+  // Remove movie night with undo functionality
   const removeMovieNight = useCallback(
     (id: string) => {
       // Find the movie night to delete
@@ -229,7 +290,7 @@ export default function MovieNightPlanner() {
     [movies, movieNights],
   )
 
-  // Memoize props for child components to prevent unnecessary re-renders
+  // Memoize props for child components
   const movieSuggestionsProps = useMemo(
     () => ({
       movies,
@@ -252,29 +313,64 @@ export default function MovieNightPlanner() {
     [movies, movieNights, scheduleMovieNight, toggleAttendance, setMovieNights, removeMovieNight],
   )
 
+  const handleTabChange = useCallback((tab: "suggestions" | "schedule") => {
+    setActiveTab(tab)
+    setMobileMenuOpen(false)
+  }, [])
+
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-center">Movie Night Planner</h1>
+      <div className=" flex flex-col min-h-screen ">
+        <header className="p-3 w-full border-b sticky top-0 bg-background z-10 shadow-sm flex items-center justify-between">
+          <div className="container mx-auto flex items-center justify-between">
+            <h1 className="text-2xl font-bold flex items-center">
+              <span className="hidden sm:inline">Movie Night Planner</span>
+              <span className="sm:hidden">MNP</span>
+            </h1>
 
-        <Tabs defaultValue="suggestions" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="suggestions">Movies</TabsTrigger>
-            <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          </TabsList>
+            {/* Navigation */}
+            <nav className="flex items-center space-x-2 sm:space-x-4">
+              <Button
+                variant="link"
+                onClick={() => setActiveTab("suggestions")}
+                className={cn(
+                  "flex items-center gap-2 font-medium",
+                  activeTab === "suggestions" ? "text-primary underline" : "text-foreground",
+                )}
+              >
+                <Film className="h-4 w-4" />
+                <span>Movies</span>
+              </Button>
+              <Button
+                variant="link"
+                onClick={() => setActiveTab("schedule")}
+                className={cn(
+                  "flex items-center gap-2 font-medium",
+                  activeTab === "schedule" ? "text-primary underline" : "text-foreground",
+                )}
+              >
+                <CalendarIcon className="h-4 w-4" />
+                <span>Schedule</span>
+              </Button>
+            </nav>
+          </div>
+        </header>
 
-          <TabsContent value="suggestions">
-            <Suspense fallback={<MovieSuggestionsFallback />}>
-              <MovieSuggestions {...movieSuggestionsProps} />
-            </Suspense>
-          </TabsContent>
+        <main className="flex-1">
+          <div className="p-3 container mx-auto py-6">
+            {activeTab === "suggestions" && (
+              <Suspense fallback={<MovieSuggestionsFallback />}>
+                <MovieSuggestions {...movieSuggestionsProps} />
+              </Suspense>
+            )}
 
-          <TabsContent value="schedule">
-            <Suspense fallback={<ScheduleAvailabilityFallback />}>
-              <ScheduleAvailability {...scheduleAvailabilityProps} />
-            </Suspense>
-          </TabsContent>
-        </Tabs>
+            {activeTab === "schedule" && (
+              <Suspense fallback={<ScheduleAvailabilityFallback />}>
+                <ScheduleAvailability {...scheduleAvailabilityProps} />
+              </Suspense>
+            )}
+          </div>
+        </main>
       </div>
       <SonnerToastProvider />
     </ThemeProvider>

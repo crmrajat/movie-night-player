@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   title: "Movie Night Planner",
   description: "Plan movie nights with friends",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -33,6 +33,8 @@ export default function RootLayout({
     </html>
   )
 }
+
+import "./globals.css"
 
 
 
